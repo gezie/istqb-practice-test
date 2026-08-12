@@ -1,32 +1,15 @@
-import { pgTable, serial, text, char, timestamp } from "drizzle-orm/pg-core"
+import { pgTable, serial, text, integer, jsonb, timestamp } from "drizzle-orm/pg-core"
 
-/**
- * Drizzle ORM schema for the ISTQB question bank.
- *
- * Equivalent SQL:
- *
- * CREATE TABLE questions (
- *   id serial PRIMARY KEY,
- *   question_text text NOT NULL,
- *   option_a text NOT NULL,
- *   option_b text NOT NULL,
- *   option_c text NOT NULL,
- *   option_d text NOT NULL,
- *   correct_answer char(1) NOT NULL, -- 'A' | 'B' | 'C' | 'D'
- *   explanation text,
- *   created_at timestamptz NOT NULL DEFAULT now()
- * );
- */
+export type QuestionType = "single" | "multiple"
+
 export const questions = pgTable("questions", {
   id: serial("id").primaryKey(),
-  questionText: text("question_text").notNull(),
-  optionA: text("option_a").notNull(),
-  optionB: text("option_b").notNull(),
-  optionC: text("option_c").notNull(),
-  optionD: text("option_d").notNull(),
-  correctAnswer: char("correct_answer", { length: 1 }).notNull(),
-  category: text("category").notNull(),
-  explanation: text("explanation"),
+  text: text("text").notNull(),
+  type: text("type").$type<QuestionType>().notNull(),
+  options: jsonb("options").$type<string[]>().notNull(),
+  correctIndices: jsonb("correct_indices").$type<number[]>().notNull(),
+  explanation: text("explanation").notNull(),
+  categoryId: integer("category_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 })
 

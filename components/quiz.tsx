@@ -1,227 +1,26 @@
 "use client"
-
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import type { Question } from "@/lib/db/schema"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
-import { Check, X, ArrowLeft, ArrowRight, RotateCcw, Lightbulb, Trophy } from "lucide-react"
+import { ArrowLeft, ArrowRight, Clock3, Flag, Trophy, RotateCcw, Lightbulb } from "lucide-react"
 
-const PASS_THRESHOLD = 65
-type Letter = "A" | "B" | "C" | "D"
-
-export function Quiz({ questions }: { questions: Question[] }) {
-  const [current, setCurrent] = useState(0)
-  const [selected, setSelected] = useState<Letter | null>(null)
-  const [correctCount, setCorrectCount] = useState(0)
-  const [finished, setFinished] = useState(false)
-
-  const total = questions.length
-  const question = questions[current]
-
-  const options = useMemo(
-    () => {
-      const shuffled = [
-        { letter: "A" as Letter, text: question.optionA },
-        { letter: "B" as Letter, text: question.optionB },
-        { letter: "C" as Letter, text: question.optionC },
-        { letter: "D" as Letter, text: question.optionD },
-      ]
-      for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]] }
-      return shuffled
-    },
-    [question],
-  )
-
-  const answered = selected !== null
-  const correctLetter = question.correctAnswer.toUpperCase() as Letter
-
-  function handleSelect(letter: Letter) {
-    if (answered) return
-    setSelected(letter)
-    if (letter === correctLetter) setCorrectCount((c) => c + 1)
-  }
-
-  function handleNext() {
-    if (current + 1 >= total) {
-      setFinished(true)
-      return
-    }
-    setCurrent((i) => i + 1)
-    setSelected(null)
-  }
-
-  function handleRestart() {
-    setCurrent(0)
-    setSelected(null)
-    setCorrectCount(0)
-    setFinished(false)
-  }
-
-  if (finished) {
-    const percentage = Math.round((correctCount / total) * 100)
-    const passed = percentage >= PASS_THRESHOLD
-
-    return (
-      <main className="flex min-h-svh flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md text-center">
-          <div
-            className={cn(
-              "mx-auto mb-6 flex size-20 items-center justify-center rounded-full",
-              passed ? "bg-success-muted text-success" : "bg-error-muted text-error",
-            )}
-          >
-            <Trophy className="size-10" />
-          </div>
-
-          <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Váš výsledek</p>
-          <p className="mt-1 text-6xl font-bold tracking-tight text-foreground">{percentage}%</p>
-          <p
-            className={cn(
-              "mt-3 text-lg font-semibold",
-              passed ? "text-success" : "text-error",
-            )}
-          >
-            {passed ? "Úspěšně splněno" : "Test nesplněn"}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Správně jste odpověděli na <span className="font-semibold text-foreground">{correctCount}</span> z{" "}
-            <span className="font-semibold text-foreground">{total}</span> otázek.
-            {!passed && ` Pro úspěch potřebujete ${PASS_THRESHOLD} %.`}
-          </p>
-
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Button onClick={handleRestart} size="lg" className="flex-1">
-              <RotateCcw className="size-4" />
-              Zkusit znovu
-            </Button>
-            <Button asChild size="lg" variant="outline" className="flex-1 bg-transparent">
-              <Link href="/">
-                <ArrowLeft className="size-4" />
-                Zpět domů
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </main>
-    )
-  }
-
-  const progress = (current / total) * 100
-
-  return (
-    <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col px-4 py-6 sm:py-10">
-      {/* Header / progress */}
-      <div className="mb-6">
-        <div className="mb-3 flex items-center justify-between">
-          <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 text-muted-foreground">
-            <Link href="/">
-              <ArrowLeft className="size-4" />
-              Ukončit
-            </Link>
-          </Button>
-          <span className="text-sm font-medium text-muted-foreground">
-            Otázka {current + 1} z {total}
-          </span>
-        </div>
-        <Progress value={progress} className="h-2" />
-      </div>
-
-      <p className="mb-2 text-sm font-semibold text-primary">{question.category}</p>
-      <div className="flex flex-1 flex-col">
-        <h1 className="text-balance text-xl font-semibold leading-snug text-foreground sm:text-2xl">
-          {question.questionText}
-        </h1>
-
-        <div className="mt-6 flex flex-col gap-3" role="radiogroup" aria-label="Možnosti odpovědi">
-          {options.map((opt, index) => {
-            const isCorrect = opt.letter === correctLetter
-            const isSelected = opt.letter === selected
-
-            const state = !answered
-              ? "idle"
-              : isCorrect
-                ? "correct"
-                : isSelected
-                  ? "wrong"
-                  : "dim"
-
-            return (
-              <button
-                key={opt.letter}
-                type="button"
-                role="radio"
-                aria-checked={isSelected}
-                disabled={answered}
-                onClick={() => handleSelect(opt.letter)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                  state === "idle" &&
-                    "border-border bg-card hover:border-primary/50 hover:bg-accent/50 cursor-pointer",
-                  state === "correct" && "border-success bg-success-muted",
-                  state === "wrong" && "border-error bg-error-muted",
-                  state === "dim" && "border-border bg-card opacity-60",
-                )}
-              >
-                <span
-                  className={cn(
-                    "flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-semibold",
-                    state === "idle" && "bg-secondary text-secondary-foreground",
-                    state === "correct" && "bg-success text-success-foreground",
-                    state === "wrong" && "bg-error text-error-foreground",
-                    state === "dim" && "bg-secondary text-secondary-foreground",
-                  )}
-                >
-                  {state === "correct" ? (
-                    <Check className="size-4" />
-                  ) : state === "wrong" ? (
-                    <X className="size-4" />
-                  ) : (
-                    String.fromCharCode(65 + index)
-                  )}
-                </span>
-                <span
-                  className={cn(
-                    "text-pretty text-sm sm:text-base",
-                    state === "correct" && "font-medium text-success",
-                    state === "wrong" && "font-medium text-error",
-                    (state === "idle" || state === "dim") && "text-foreground",
-                  )}
-                >
-                  {opt.text}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Explanation */}
-        {answered && (
-          <div className="mt-5 rounded-xl border border-border bg-accent/40 p-4">
-            <div className="flex items-center gap-2">
-              <Lightbulb className="size-4 text-primary" />
-              <span className="text-sm font-semibold text-foreground">
-                {selected === correctLetter ? "Správně!" : "Vysvětlení"}
-              </span>
-            </div>
-            <p className="mt-2 text-pretty text-sm leading-relaxed text-muted-foreground">
-              {question.explanation
-                ? question.explanation
-                : "Tato možnost odpovídá principům sylabu ISTQB."}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="sticky bottom-0 mt-6 bg-gradient-to-t from-background via-background to-transparent pt-4">
-        <Button onClick={handleNext} disabled={!answered} size="lg" className="w-full">
-          {current + 1 >= total ? "Dokončit test" : "Další otázka"}
-          <ArrowRight className="size-4" />
-        </Button>
-      </div>
-    </main>
-  )
+type Answer=number[]
+const same=(a:Answer,b:Answer)=>[...a].sort().join(",")===[...b].sort().join(",")
+export function Quiz({questions:source,mode}:{questions:Question[];mode:string}){
+ const [questions,setQuestions]=useState(source);const[current,setCurrent]=useState(0);const[answers,setAnswers]=useState<Record<number,Answer>>({});const[flags,setFlags]=useState<number[]>([]);const[screen,setScreen]=useState<"quiz"|"review"|"result">("quiz");const[seconds,setSeconds]=useState(3600)
+ useEffect(()=>{if(mode==="mistakes"){const ids=JSON.parse(localStorage.getItem("istqb-chybne-otazky")||"[]") as number[];setQuestions(source.filter(q=>ids.includes(q.id))) }},[mode,source])
+ useEffect(()=>{if(mode!=="full"||screen!=="quiz")return;const timer=setInterval(()=>setSeconds(s=>Math.max(0,s-1)),1000);return()=>clearInterval(timer)},[mode,screen])
+ const submit=useCallback(()=>{const wrong=questions.filter(q=>!same(answers[q.id]||[],q.correctIndices)).map(q=>q.id);localStorage.setItem("istqb-chybne-otazky",JSON.stringify(wrong));setScreen("result")},[answers,questions])
+ useEffect(()=>{if(mode==="full"&&seconds===0&&screen!=="result")submit()},[seconds,mode,screen,submit])
+ const shuffled=useMemo(()=>Object.fromEntries(questions.map(q=>[q.id,q.options.map((text,index)=>({text,index})).sort(()=>Math.random()-.5)])),[questions])
+ if(!questions.length)return <main className="flex min-h-svh items-center justify-center p-6 text-center"><div><h1 className="text-2xl font-bold">Nemáte uložené žádné chybné odpovědi</h1><p className="mt-2 text-muted-foreground">Nejprve dokončete test a potom se sem vraťte.</p><Button asChild className="mt-6"><Link href="/">Zpět na úvod</Link></Button></div></main>
+ const score=questions.filter(q=>same(answers[q.id]||[],q.correctIndices)).length;const percent=Math.round(score/questions.length*100)
+ if(screen==="result")return <main className="mx-auto min-h-svh max-w-3xl px-4 py-12"><section className="text-center"><Trophy className={cn("mx-auto size-16",percent>=65?"text-success":"text-error")}/><p className="mt-5 text-sm font-semibold uppercase text-muted-foreground">Váš konečný výsledek</p><h1 className="mt-1 text-6xl font-bold">{percent} %</h1><p className={cn("mt-3 text-xl font-semibold",percent>=65?"text-success":"text-error")}>{percent>=65?"Úspěšně splněno":"Test nebyl splněn"}</p><p className="mt-2 text-muted-foreground">Správně {score} z {questions.length}. Hranice úspěšnosti je 65 %.</p></section><h2 className="mt-10 text-2xl font-bold">Kontrola všech odpovědí</h2><div className="mt-4 space-y-4">{questions.map((q,i)=><article key={q.id} className="rounded-xl border bg-card p-5"><p className="font-semibold">{i+1}. {q.text}</p><p className={cn("mt-2 text-sm font-medium",same(answers[q.id]||[],q.correctIndices)?"text-success":"text-error")}>{same(answers[q.id]||[],q.correctIndices)?"Správná odpověď":"Nesprávná odpověď"}</p><div className="mt-3 flex gap-2 text-sm text-muted-foreground"><Lightbulb className="size-4 shrink-0 text-primary"/><p>{q.explanation}</p></div></article>)}</div><div className="mt-8 flex gap-3"><Button onClick={()=>location.reload()}><RotateCcw/>Zkusit znovu</Button><Button asChild variant="outline"><Link href="/">Zpět domů</Link></Button></div></main>
+ if(screen==="review")return <main className="mx-auto min-h-svh max-w-3xl px-4 py-12"><h1 className="text-3xl font-bold">Kontrola před odevzdáním</h1><p className="mt-2 text-muted-foreground">Zkontrolujte zodpovězené, nezodpovězené a označené otázky.</p><div className="mt-6 flex flex-wrap gap-4 text-sm"><span><i className="mr-2 inline-block size-3 bg-primary"/>Zodpovězeno</span><span><i className="mr-2 inline-block size-3 bg-muted"/>Nezodpovězeno</span><span><i className="mr-2 inline-block size-3 bg-yellow-400"/>Označeno k revizi</span></div><div className="mt-6 grid grid-cols-5 gap-3 sm:grid-cols-8 md:grid-cols-10">{questions.map((q,i)=><button key={q.id} onClick={()=>{setCurrent(i);setScreen("quiz")}} className={cn("aspect-square rounded-md border text-sm font-bold",flags.includes(q.id)?"border-yellow-500 bg-yellow-300 text-yellow-950":answers[q.id]?.length?"border-primary bg-primary text-primary-foreground":"bg-muted")}>{i+1}</button>)}</div><div className="mt-8 flex flex-col gap-3 sm:flex-row"><Button variant="outline" onClick={()=>setScreen("quiz")}><ArrowLeft/>Vrátit se k otázkám</Button><Button onClick={submit}>Odevzdat test</Button></div></main>
+ const q=questions[current], selected=answers[q.id]||[], required=q.correctIndices.length
+ const choose=(idx:number)=>setAnswers(a=>({...a,[q.id]:q.type==="single"?[idx]:selected.includes(idx)?selected.filter(x=>x!==idx):selected.length<required?[...selected,idx]:selected}))
+ return <main className="mx-auto flex min-h-svh max-w-3xl flex-col px-4 py-6"><header className="mb-6"><div className="mb-3 flex items-center justify-between"><Button asChild variant="ghost" size="sm"><Link href="/"><ArrowLeft/>Ukončit</Link></Button>{mode==="full"&&<span className={cn("flex items-center gap-2 font-mono font-bold",seconds<300&&"text-error")}><Clock3 className="size-4"/>{String(Math.floor(seconds/60)).padStart(2,"0")}:{String(seconds%60).padStart(2,"0")}</span>}<span className="text-sm text-muted-foreground">Otázka {current+1} z {questions.length}</span></div><Progress value={(current+1)/questions.length*100}/></header><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-semibold text-primary">Kapitola {q.categoryId}</p><h1 className="mt-2 text-xl font-semibold sm:text-2xl">{q.text}</h1><p className="mt-2 text-sm text-muted-foreground">{q.type==="multiple"?`Vyberte přesně ${required} správné odpovědi.`:"Vyberte právě jednu správnou odpověď."}</p></div><Button variant={flags.includes(q.id)?"default":"outline"} size="sm" onClick={()=>setFlags(f=>f.includes(q.id)?f.filter(x=>x!==q.id):[...f,q.id])}><Flag/> <span className="hidden sm:inline">Označit k revizi</span></Button></div><div className="mt-6 space-y-3">{shuffled[q.id].map((o:{text:string,index:number},i:number)=><label key={o.index} className={cn("flex cursor-pointer items-center gap-3 rounded-xl border-2 bg-card p-4",selected.includes(o.index)&&"border-primary bg-accent")}><input className="size-4 accent-primary" type={q.type==="single"?"radio":"checkbox"} name={`otazka-${q.id}`} checked={selected.includes(o.index)} onChange={()=>choose(o.index)}/><span className="flex size-7 shrink-0 items-center justify-center rounded bg-muted text-sm font-bold">{String.fromCharCode(65+i)}</span><span>{o.text}</span></label>)}</div><footer className="mt-auto flex justify-between gap-3 pt-8"><Button variant="outline" disabled={!current} onClick={()=>setCurrent(i=>i-1)}><ArrowLeft/>Předchozí</Button>{current<questions.length-1?<Button onClick={()=>setCurrent(i=>i+1)}>Další<ArrowRight/></Button>:<Button onClick={()=>setScreen("review")}>Zkontrolovat test<ArrowRight/></Button>}</footer></main>
 }
