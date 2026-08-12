@@ -17,7 +17,7 @@ export default function AddQuestionPage() {
           Přidat otázku
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Vytvořte novou otázku se čtyřmi možnostmi odpovědi.
+          Vytvořte novou otázku a přímo označte správné možnosti odpovědi.
         </p>
       </div>
 

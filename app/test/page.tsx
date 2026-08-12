@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { getAllQuestions, getFullExamQuestions, getQuestionsByChapters } from "@/app/actions/questions"
+import { getFullExamQuestions, getQuestionsByChapters } from "@/app/actions/questions"
 import { Quiz } from "@/components/quiz"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Inbox } from "lucide-react"
@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic"
 
 export default async function TestPage({ searchParams }: { searchParams: Promise<{mode?: string;chapters?: string}> }) {
   const params = await searchParams
-  const mode=params.mode||"full"
-  const questions = mode === "chapters" ? await getQuestionsByChapters((params.chapters||"1").split(",").map(Number)) : mode==="mistakes" ? await getAllQuestions() : await getFullExamQuestions()
+  const mode=params.mode||"quick"
+  const questions = mode === "chapters" ? await getQuestionsByChapters((params.chapters||"1").split(",").map(Number)) : await getFullExamQuestions()
 
   if (questions.length === 0) {
     return (
