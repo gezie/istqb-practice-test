@@ -41,7 +41,7 @@ const usesDatabase = Boolean(process.env.DATABASE_URL)
 async function ensureDatabase() {
   if (!usesDatabase) return
   store.istqbDatabaseReady ??= (async () => {
-    await db.execute(sql`CREATE TABLE IF NOT EXISTS questions (
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS istqb_questions (
       id serial PRIMARY KEY,
       text text NOT NULL,
       type text NOT NULL,
