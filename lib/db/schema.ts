@@ -1,6 +1,6 @@
 import { pgTable, serial, text, integer, jsonb, timestamp } from "drizzle-orm/pg-core"
 
-export type QuestionType = "single" | "multiple"
+export type QuestionType = "single" | "multiple" | "matching"
 
 export const questions = pgTable("questions", {
   id: serial("id").primaryKey(),
