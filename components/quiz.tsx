@@ -10,7 +10,6 @@ import { Check, X, ArrowLeft, ArrowRight, RotateCcw, Lightbulb, Trophy } from "l
 
 const PASS_THRESHOLD = 65
 type Letter = "A" | "B" | "C" | "D"
-const LETTERS: Letter[] = ["A", "B", "C", "D"]
 
 export function Quiz({ questions }: { questions: Question[] }) {
   const [current, setCurrent] = useState(0)
@@ -22,13 +21,16 @@ export function Quiz({ questions }: { questions: Question[] }) {
   const question = questions[current]
 
   const options = useMemo(
-    () =>
-      [
+    () => {
+      const shuffled = [
         { letter: "A" as Letter, text: question.optionA },
         { letter: "B" as Letter, text: question.optionB },
         { letter: "C" as Letter, text: question.optionC },
         { letter: "D" as Letter, text: question.optionD },
-      ],
+      ]
+      for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]] }
+      return shuffled
+    },
     [question],
   )
 
@@ -73,7 +75,7 @@ export function Quiz({ questions }: { questions: Question[] }) {
             <Trophy className="size-10" />
           </div>
 
-          <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Your result</p>
+          <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">Váš výsledek</p>
           <p className="mt-1 text-6xl font-bold tracking-tight text-foreground">{percentage}%</p>
           <p
             className={cn(
@@ -81,23 +83,23 @@ export function Quiz({ questions }: { questions: Question[] }) {
               passed ? "text-success" : "text-error",
             )}
           >
-            {passed ? "Passed!" : "Not passed"}
+            {passed ? "Úspěšně splněno" : "Test nesplněn"}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            You answered <span className="font-semibold text-foreground">{correctCount}</span> of{" "}
-            <span className="font-semibold text-foreground">{total}</span> questions correctly.
-            {!passed && ` You need ${PASS_THRESHOLD}% to pass.`}
+            Správně jste odpověděli na <span className="font-semibold text-foreground">{correctCount}</span> z{" "}
+            <span className="font-semibold text-foreground">{total}</span> otázek.
+            {!passed && ` Pro úspěch potřebujete ${PASS_THRESHOLD} %.`}
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Button onClick={handleRestart} size="lg" className="flex-1">
               <RotateCcw className="size-4" />
-              Try again
+              Zkusit znovu
             </Button>
             <Button asChild size="lg" variant="outline" className="flex-1 bg-transparent">
               <Link href="/">
                 <ArrowLeft className="size-4" />
-                Back home
+                Zpět domů
               </Link>
             </Button>
           </div>
@@ -116,24 +118,24 @@ export function Quiz({ questions }: { questions: Question[] }) {
           <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 text-muted-foreground">
             <Link href="/">
               <ArrowLeft className="size-4" />
-              Exit
+              Ukončit
             </Link>
           </Button>
           <span className="text-sm font-medium text-muted-foreground">
-            Question {current + 1} of {total}
+            Otázka {current + 1} z {total}
           </span>
         </div>
         <Progress value={progress} className="h-2" />
       </div>
 
-      {/* Question */}
+      <p className="mb-2 text-sm font-semibold text-primary">{question.category}</p>
       <div className="flex flex-1 flex-col">
         <h1 className="text-balance text-xl font-semibold leading-snug text-foreground sm:text-2xl">
           {question.questionText}
         </h1>
 
-        <div className="mt-6 flex flex-col gap-3" role="radiogroup" aria-label="Answer options">
-          {options.map((opt) => {
+        <div className="mt-6 flex flex-col gap-3" role="radiogroup" aria-label="Možnosti odpovědi">
+          {options.map((opt, index) => {
             const isCorrect = opt.letter === correctLetter
             const isSelected = opt.letter === selected
 
@@ -177,7 +179,7 @@ export function Quiz({ questions }: { questions: Question[] }) {
                   ) : state === "wrong" ? (
                     <X className="size-4" />
                   ) : (
-                    opt.letter
+                    String.fromCharCode(65 + index)
                   )}
                 </span>
                 <span
@@ -201,13 +203,13 @@ export function Quiz({ questions }: { questions: Question[] }) {
             <div className="flex items-center gap-2">
               <Lightbulb className="size-4 text-primary" />
               <span className="text-sm font-semibold text-foreground">
-                {selected === correctLetter ? "Correct!" : "Explanation"}
+                {selected === correctLetter ? "Správně!" : "Vysvětlení"}
               </span>
             </div>
             <p className="mt-2 text-pretty text-sm leading-relaxed text-muted-foreground">
               {question.explanation
                 ? question.explanation
-                : `The correct answer is ${correctLetter}.`}
+                : "Tato možnost odpovídá principům sylabu ISTQB."}
             </p>
           </div>
         )}
@@ -216,7 +218,7 @@ export function Quiz({ questions }: { questions: Question[] }) {
       {/* Footer */}
       <div className="sticky bottom-0 mt-6 bg-gradient-to-t from-background via-background to-transparent pt-4">
         <Button onClick={handleNext} disabled={!answered} size="lg" className="w-full">
-          {current + 1 >= total ? "Finish test" : "Next question"}
+          {current + 1 >= total ? "Dokončit test" : "Další otázka"}
           <ArrowRight className="size-4" />
         </Button>
       </div>

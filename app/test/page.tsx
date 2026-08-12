@@ -1,13 +1,14 @@
 import Link from "next/link"
-import { getQuizQuestions } from "@/app/actions/questions"
+import { getFullExamQuestions, getQuizQuestions } from "@/app/actions/questions"
 import { Quiz } from "@/components/quiz"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Inbox } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
-export default async function TestPage() {
-  const questions = await getQuizQuestions(40)
+export default async function TestPage({ searchParams }: { searchParams: Promise<{mode?: string,size?: string}> }) {
+  const params = await searchParams
+  const questions = params.mode === "quick" ? await getQuizQuestions(Number(params.size) === 20 ? 20 : 10) : await getFullExamQuestions()
 
   if (questions.length === 0) {
     return (
@@ -16,20 +17,20 @@ export default async function TestPage() {
           <Inbox className="size-7" />
         </div>
         <div className="max-w-sm">
-          <h1 className="text-xl font-semibold text-foreground">No questions available</h1>
+          <h1 className="text-xl font-semibold text-foreground">Nejsou dostupné žádné otázky</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            The question bank is empty. Add some questions before starting a practice test.
+            Databáze je prázdná. Před spuštěním testu přidejte otázky.
           </p>
         </div>
         <div className="flex gap-3">
           <Button asChild variant="outline">
             <Link href="/">
               <ArrowLeft className="size-4" />
-              Home
+              Domů
             </Link>
           </Button>
           <Button asChild>
-            <Link href="/admin/add">Add a question</Link>
+            <Link href="/admin/add">Přidat otázku</Link>
           </Button>
         </div>
       </main>

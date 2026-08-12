@@ -25,6 +25,7 @@ export const questions = pgTable("questions", {
   optionC: text("option_c").notNull(),
   optionD: text("option_d").notNull(),
   correctAnswer: char("correct_answer", { length: 1 }).notNull(),
+  category: text("category").notNull(),
   explanation: text("explanation"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 })
