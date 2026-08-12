@@ -1,10 +1,2 @@
-import Link from "next/link"
-import { getAllQuestions, updateQuestion } from "@/app/actions/questions"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Save } from "lucide-react"
-import { notFound, redirect } from "next/navigation"
-
-export default async function EditPage({params}:{params:Promise<{id:string}>}) { const {id}=await params; const q=(await getAllQuestions()).find(x=>x.id===Number(id)); if(!q) notFound(); async function save(formData:FormData){"use server";await updateQuestion(Number(id),formData);redirect("/admin")}
- return <main className="mx-auto max-w-2xl px-4 py-10"><Link href="/admin" className="flex items-center gap-2 text-sm text-muted-foreground"><ArrowLeft className="size-4"/>Zpět na správu</Link><h1 className="mt-5 text-3xl font-bold">Upravit otázku</h1><form action={save} className="mt-6 space-y-5 rounded-xl border bg-card p-6"><label className="block text-sm font-medium">Text otázky<Textarea name="questionText" defaultValue={q.questionText} className="mt-2" required/></label>{(["A","B","C","D"] as const).map(l=><label key={l} className="block text-sm font-medium">Možnost {l}<Input name={`option${l}`} defaultValue={q[`option${l}`]} className="mt-2" required/></label>)}<label className="block text-sm font-medium">Správná odpověď<select name="correctAnswer" defaultValue={q.correctAnswer} className="mt-2 block w-full rounded-md border bg-background p-2">{["A","B","C","D"].map(x=><option key={x}>{x}</option>)}</select></label><label className="block text-sm font-medium">Kapitola<select name="category" defaultValue={q.category} className="mt-2 block w-full rounded-md border bg-background p-2">{[1,2,3,4,5,6].map(x=><option key={x}>Kapitola {x}</option>)}</select></label><label className="block text-sm font-medium">Vysvětlení<Textarea name="explanation" defaultValue={q.explanation??""} className="mt-2"/></label><Button type="submit"><Save/>Uložit změny</Button></form></main> }
+import { redirect } from "next/navigation"
+export default function EditPage(){redirect("/admin")}

@@ -1,90 +1,36 @@
 "use server"
 
-import type { Question } from "@/lib/db/schema"
+import type { Question, QuestionType } from "@/lib/db/schema"
 import { revalidatePath } from "next/cache"
 
-const KAPITOLY = ["Kapitola 1", "Kapitola 2", "Kapitola 3", "Kapitola 4", "Kapitola 5", "Kapitola 6"]
-const TEMATA = ["Základy testování", "Testování v životním cyklu", "Statické testování", "Techniky testování", "Řízení testování", "Nástroje pro testování"]
-const store = globalThis as typeof globalThis & { istqbQuestions?: Question[] }
-if (!store.istqbQuestions) {
-  store.istqbQuestions = Array.from({ length: 40 }, (_, i) => {
-    const chapter = i < 8 ? 0 : i < 13 ? 1 : i < 18 ? 2 : i < 29 ? 3 : i < 38 ? 4 : 5
-    return {
-      id: i + 1,
-      questionText: `${TEMATA[chapter]}: Které tvrzení nejlépe odpovídá principům sylabu ISTQB? (${i + 1})`,
-      optionA: "Testování snižuje pravděpodobnost výskytu neodhalených vad.",
-      optionB: "Testování dokazuje, že software neobsahuje žádné vady.",
-      optionC: "Každý test musí provést výhradně vývojář.",
-      optionD: "Automatizace vždy nahrazuje ruční testování.",
-      correctAnswer: "A", category: KAPITOLY[chapter],
-      explanation: "Testování může prokázat přítomnost vad, nikoli jejich úplnou nepřítomnost.",
-      createdAt: new Date(2026, 0, i + 1),
-    }
-  })
-}
-const data = () => store.istqbQuestions!
-
-export async function getQuestionCount(): Promise<number> {
-  return data().length
-}
-
-export async function getQuizQuestions(limit = 40): Promise<Question[]> {
-  return [...data()].sort(() => Math.random() - 0.5).slice(0, limit)
-}
-
-export async function getFullExamQuestions(): Promise<Question[]> {
-  const counts = [8, 5, 5, 11, 9, 2]
-  return KAPITOLY.flatMap((category, index) => data().filter(q => q.category === category).sort(() => Math.random() - .5).slice(0, counts[index]))
-}
-
-export async function getAllQuestions(): Promise<Question[]> {
-  return [...data()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-}
-
-export type AddQuestionState = {
-  success?: boolean
-  error?: string
-}
-
-export async function addQuestion(
-  _prevState: AddQuestionState,
-  formData: FormData,
-): Promise<AddQuestionState> {
-  const questionText = String(formData.get("questionText") ?? "").trim()
-  const optionA = String(formData.get("optionA") ?? "").trim()
-  const optionB = String(formData.get("optionB") ?? "").trim()
-  const optionC = String(formData.get("optionC") ?? "").trim()
-  const optionD = String(formData.get("optionD") ?? "").trim()
-  const correctAnswer = String(formData.get("correctAnswer") ?? "").trim().toUpperCase()
-  const explanation = String(formData.get("explanation") ?? "").trim()
-  const category = String(formData.get("category") ?? "")
-
-  if (!questionText || !optionA || !optionB || !optionC || !optionD) {
-    return { error: "Vyplňte text otázky a všechny čtyři možnosti." }
+const CHAPTERS = ["Základy testování", "Testování v životním cyklu vývoje softwaru", "Statické testování", "Analýza a návrh testů", "Řízení testovacích činností", "Testovací nástroje"]
+const distribution = [8, 5, 5, 11, 9, 2]
+const store = globalThis as typeof globalThis & { istqbQuestionsV4?: Question[] }
+if (!store.istqbQuestionsV4) store.istqbQuestionsV4 = Array.from({ length: 54 }, (_, i) => {
+  const categoryId = (i % 6) + 1
+  const multiple = i % 4 === 1
+  return {
+    id: i + 1, text: `${CHAPTERS[categoryId - 1]}: Které tvrzení odpovídá principům sylabu ISTQB?`, type: (multiple ? "multiple" : "single") as QuestionType,
+    options: multiple ? ["Testování odhaluje vady.", "Testování snižuje riziko.", "Testování dokazuje bezchybnost.", "Testovat smí pouze vývojář.", "Automatizace nahrazuje všechny testery."] : ["Testování odhaluje vady a snižuje riziko.", "Testování dokazuje úplnou bezchybnost.", "Testování začíná až po implementaci.", "Všechny testy musí být automatizované."],
+    correctIndices: multiple ? [0, 1] : [0], explanation: "Testování ukazuje přítomnost vad, nikoli jejich nepřítomnost, a pomáhá řídit produktová rizika.", categoryId, createdAt: new Date(2026, 0, i + 1),
   }
-  if (!["A", "B", "C", "D"].includes(correctAnswer)) {
-    return { error: "Vyberte správnou odpověď." }
-  }
-  if (!KAPITOLY.includes(category)) return { error: "Vyberte kapitolu." }
-  data().unshift({ id: Math.max(0, ...data().map(q => q.id)) + 1, questionText, optionA, optionB, optionC, optionD, correctAnswer, category, explanation: explanation || null, createdAt: new Date() })
-
-  revalidatePath("/")
-  revalidatePath("/admin/add")
-  revalidatePath("/admin")
-  return { success: true }
+})
+const data = () => store.istqbQuestionsV4!
+const shuffle = <T,>(items: T[]) => [...items].sort(() => Math.random() - .5)
+export async function getQuestionCount() { return data().length }
+export async function getAllQuestions() { return [...data()].sort((a,b) => b.id-a.id) }
+export async function getQuestionsByChapters(ids: number[]) { return shuffle(data().filter(q => ids.includes(q.categoryId))).slice(0,40) }
+export async function getFullExamQuestions() { return distribution.flatMap((count, i) => shuffle(data().filter(q => q.categoryId === i + 1)).slice(0,count)) }
+export async function deleteQuestion(id:number) { store.istqbQuestionsV4=data().filter(q=>q.id!==id); revalidatePath("/admin") }
+export type AddQuestionState={success?:boolean;error?:string}
+function validate(value: unknown): Omit<Question,"id"|"createdAt"> {
+  const q=value as Record<string,unknown>; const type=q.type as QuestionType
+  const optionCount=Array.isArray(q.options)?q.options.length:0
+  if(typeof q.text!=="string" || !["single","multiple"].includes(type) || !Array.isArray(q.options) || optionCount<4 || optionCount>5 || !q.options.every(x=>typeof x==="string") || !Array.isArray(q.correctIndices) || !q.correctIndices.every(x=>Number.isInteger(x)&&Number(x)>=0&&Number(x)<optionCount) || typeof q.explanation!=="string" || !Number.isInteger(q.categoryId)||Number(q.categoryId)<1||Number(q.categoryId)>6) throw new Error("Neplatná struktura otázky.")
+  if(type==="single"&&q.correctIndices.length!==1) throw new Error("Otázka typu single musí mít právě jednu správnou odpověď.")
+  if(type==="multiple"&&q.correctIndices.length<2) throw new Error("Otázka typu multiple musí mít alespoň dvě správné odpovědi.")
+  return {text:q.text,type,options:q.options as string[],correctIndices:q.correctIndices as number[],explanation:q.explanation,categoryId:Number(q.categoryId)}
 }
-
-export async function deleteQuestion(id: number) {
-  store.istqbQuestions = data().filter(q => q.id !== id)
-  revalidatePath("/admin")
-}
-
-export async function updateQuestion(id: number, formData: FormData) {
-  const question = data().find(q => q.id === id)
-  if (!question) return
-  for (const key of ["questionText", "optionA", "optionB", "optionC", "optionD", "correctAnswer", "category", "explanation"] as const) {
-    const value = String(formData.get(key) ?? "").trim()
-    if (value) Object.assign(question, { [key]: value })
-  }
-  revalidatePath("/admin")
-}
+export async function bulkImportQuestions(json:string):Promise<AddQuestionState>{try{const parsed=JSON.parse(json);if(!Array.isArray(parsed))return{error:"JSON musí obsahovat pole otázek."};const valid=parsed.map(validate);let next=Math.max(...data().map(q=>q.id),0)+1;data().unshift(...valid.map(q=>({...q,id:next++,createdAt:new Date()})));revalidatePath("/admin");revalidatePath("/");return{success:true}}catch(e){return{error:e instanceof Error?e.message:"JSON se nepodařilo zpracovat."}}}
+export async function addQuestion(_s:AddQuestionState,formData:FormData):Promise<AddQuestionState>{try{const options=String(formData.get("options")||"").split("\n").map(x=>x.trim()).filter(Boolean);const q=validate({text:String(formData.get("text")||""),type:String(formData.get("type")||"single"),options,correctIndices:String(formData.get("correctIndices")||"").split(",").map(Number),explanation:String(formData.get("explanation")||""),categoryId:Number(formData.get("categoryId"))});data().unshift({...q,id:Math.max(...data().map(x=>x.id),0)+1,createdAt:new Date()});revalidatePath("/admin");return{success:true}}catch(e){return{error:e instanceof Error?e.message:"Otázku nelze uložit."}}}
+export async function updateQuestion(){ return }
