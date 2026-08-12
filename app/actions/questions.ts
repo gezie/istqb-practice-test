@@ -3,6 +3,9 @@
 import type { Question, QuestionType } from "@/lib/db/schema"
 import { revalidatePath } from "next/cache"
 import { EXAM_WEIGHTS } from "@/lib/chapters"
+import { db } from "@/lib/db"
+import { questions } from "@/lib/db/schema"
+import { desc, eq, inArray, sql } from "drizzle-orm"
 
 const seedQuestions: Omit<Question, "id" | "createdAt">[] = [
   { text: "Které dva výroky správně popisují cíle testování?", type: "multiple", options: ["Vyhodnotit pracovní produkty", "Snížit úroveň produktového rizika", "Dokázat, že software nemá vady", "Nahradit ladění", "Zaručit termín vydání"], correctIndices: [0, 1], explanation: "Testování hodnotí pracovní produkty a poskytuje informace ke snížení rizik; úplnou bezchybnost dokázat nemůže.", categoryId: 1 },
@@ -25,7 +28,7 @@ const seedQuestions: Omit<Question, "id" | "createdAt">[] = [
   { text: "Který faktor je nejdůležitější při zavádění nového testovacího nástroje?", type: "single", options: ["Pilotní ověření a vyhodnocení přínosů pro konkrétní prostředí", "Nákup nejdražší licence bez analýzy", "Okamžité zrušení všech ručních testů", "Výběr pouze podle vzhledu uživatelského rozhraní"], correctIndices: [0], explanation: "Pilotní projekt ověří vhodnost nástroje, náklady, přínosy i potřebné změny procesu.", categoryId: 6 },
 ]
 
-const store = globalThis as typeof globalThis & { istqbQuestionsV4?: Question[] }
+const store = globalThis as typeof globalThis & { istqbQuestionsV4?: Question[]; istqbDatabaseReady?: Promise<void> }
 if (!store.istqbQuestionsV4) store.istqbQuestionsV4 = []
 // Seedujeme pouze skutečně prázdné úložiště, takže restart modulu nevytváří kopie.
 if (store.istqbQuestionsV4.length === 0) {
@@ -33,16 +36,50 @@ if (store.istqbQuestionsV4.length === 0) {
 }
 const data = () => store.istqbQuestionsV4!
 const shuffle = <T,>(items: T[]) => { const result=[...items]; for(let i=result.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[result[i],result[j]]=[result[j],result[i]]} return result }
-export async function getQuestionCount() { return data().length }
-export async function getAllQuestions() { return [...data()].sort((a,b) => b.id-a.id) }
-export async function getQuestion(id:number) { return data().find(question => question.id === id) ?? null }
-export async function getQuestionsByChapters(ids: number[]) { return shuffle(data().filter(q => ids.includes(q.categoryId))).slice(0,40) }
-export async function getFullExamQuestions(total = 40) { const exact=EXAM_WEIGHTS.map(w=>w*total);const counts=exact.map(Math.floor);exact.map((v,i)=>({i,f:v-counts[i]})).sort((a,b)=>b.f-a.f).slice(0,total-counts.reduce((s,c)=>s+c,0)).forEach(({i})=>counts[i]++);return shuffle(counts.flatMap((count,index)=>shuffle(data().filter(q=>q.categoryId===index+1)).slice(0,count))) }
-export async function deleteQuestion(id:number) { store.istqbQuestionsV4=data().filter(q=>q.id!==id); revalidatePath("/admin") }
-export async function deleteDuplicateQuestions() { const seen=new Set<string>();let removed=0;store.istqbQuestionsV4=data().filter(question=>{if(seen.has(question.text)){removed++;return false}seen.add(question.text);return true});revalidatePath("/admin");revalidatePath("/");return removed }
+
+const usesDatabase = Boolean(process.env.DATABASE_URL)
+async function ensureDatabase() {
+  if (!usesDatabase) return
+  store.istqbDatabaseReady ??= (async () => {
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS istqb_questions (
+      id serial PRIMARY KEY,
+      text text NOT NULL,
+      type text NOT NULL,
+      options jsonb NOT NULL,
+      correct_indices jsonb NOT NULL,
+      explanation text NOT NULL,
+      category_id integer NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`)
+    const existing = await db.select({ id: questions.id }).from(questions).limit(1)
+    if (existing.length === 0) await db.insert(questions).values(seedQuestions)
+  })()
+  await store.istqbDatabaseReady
+}
+async function allQuestions() {
+  if (!usesDatabase) return [...data()]
+  await ensureDatabase()
+  return db.select().from(questions)
+}
+
+export async function getQuestionCount() { return (await allQuestions()).length }
+export async function getAllQuestions() { if (!usesDatabase) return [...data()].sort((a,b) => b.id-a.id); await ensureDatabase(); return db.select().from(questions).orderBy(desc(questions.id)) }
+export async function getQuestion(id:number) { if (!usesDatabase) return data().find(question => question.id === id) ?? null; await ensureDatabase(); return (await db.select().from(questions).where(eq(questions.id,id)).limit(1))[0] ?? null }
+export async function getQuestionsByChapters(ids: number[]) { return shuffle((await allQuestions()).filter(q => ids.includes(q.categoryId))).slice(0,40) }
+export async function getFullExamQuestions(total = 40) {
+  const available = await allQuestions()
+  const exact=EXAM_WEIGHTS.map(w=>w*total);const counts=exact.map(Math.floor)
+  exact.map((v,i)=>({i,f:v-counts[i]})).sort((a,b)=>b.f-a.f).slice(0,total-counts.reduce((s,c)=>s+c,0)).forEach(({i})=>counts[i]++)
+  const selected = counts.flatMap((count,index)=>shuffle(available.filter(q=>q.categoryId===index+1)).slice(0,count))
+  const selectedIds = new Set(selected.map(question => question.id))
+  const remainder = shuffle(available.filter(question => !selectedIds.has(question.id))).slice(0, Math.max(0, total - selected.length))
+  return shuffle([...selected, ...remainder])
+}
+export async function deleteQuestion(id:number) { if (usesDatabase) { await ensureDatabase(); await db.delete(questions).where(eq(questions.id,id)) } else store.istqbQuestionsV4=data().filter(q=>q.id!==id); revalidatePath("/admin"); revalidatePath("/") }
+export async function deleteDuplicateQuestions() { const items=await allQuestions();const seen=new Set<string>();const duplicateIds:number[]=[];items.sort((a,b)=>a.id-b.id).forEach(question=>{if(seen.has(question.text))duplicateIds.push(question.id);else seen.add(question.text)});if(usesDatabase&&duplicateIds.length){await db.delete(questions).where(inArray(questions.id,duplicateIds))}else if(!usesDatabase){store.istqbQuestionsV4=data().filter(q=>!duplicateIds.includes(q.id))}revalidatePath("/admin");revalidatePath("/");return duplicateIds.length }
 export type AddQuestionState={success?:boolean;error?:string}
 function validate(value: unknown): Omit<Question,"id"|"createdAt"> { const q=value as Record<string,unknown>;const type=q.type as QuestionType;const count=Array.isArray(q.options)?q.options.length:0;if(typeof q.text!=="string"||!q.text.trim()||!["single","multiple","matching"].includes(type)||!Array.isArray(q.options)||count<4||count>5||!q.options.every(x=>typeof x==="string"&&x.trim())||!Array.isArray(q.correctIndices)||!q.correctIndices.every(x=>Number.isInteger(x)&&Number(x)>=0&&Number(x)<count)||typeof q.explanation!=="string"||!q.explanation.trim()||!Number.isInteger(q.categoryId)||Number(q.categoryId)<1||Number(q.categoryId)>6)throw new Error("Zkontrolujte prosím, zda jsou všechna pole správně vyplněná.");if(q.correctIndices.length===0)throw new Error("Vyberte prosím správnou odpověď.");if((type==="single"||type==="matching")&&q.correctIndices.length!==1)throw new Error("Otázka s jednou odpovědí musí mít právě jednu správnou možnost.");if(type==="multiple"&&q.correctIndices.length<2)throw new Error("Otázka s více odpověďmi musí mít alespoň dvě správné možnosti.");return{text:q.text.trim(),type,options:(q.options as string[]).map(x=>x.trim()),correctIndices:q.correctIndices as number[],explanation:q.explanation.trim(),categoryId:Number(q.categoryId)} }
 function fromForm(formData:FormData){const type=String(formData.get("type")||"single") as QuestionType;const optionCount=type==="multiple"?5:4;return validate({text:String(formData.get("text")||""),type,options:Array.from({length:optionCount},(_,i)=>String(formData.get(`option-${i}`)||"")),correctIndices:formData.getAll("correctIndices").map(Number),explanation:String(formData.get("explanation")||""),categoryId:Number(formData.get("categoryId"))})}
-export async function bulkImportQuestions(json:string):Promise<AddQuestionState>{try{const parsed=JSON.parse(json);if(!Array.isArray(parsed))return{error:"JSON musí obsahovat pole otázek."};const valid=parsed.map(validate);let next=Math.max(...data().map(q=>q.id),0)+1;data().unshift(...valid.map(q=>({...q,id:next++,createdAt:new Date()})));revalidatePath("/admin");revalidatePath("/");return{success:true}}catch(e){return{error:e instanceof Error?e.message:"JSON se nepodařilo zpracovat."}}}
-export async function addQuestion(_state:AddQuestionState,formData:FormData):Promise<AddQuestionState>{try{const question=fromForm(formData);data().unshift({...question,id:Math.max(...data().map(x=>x.id),0)+1,createdAt:new Date()});revalidatePath("/admin");return{success:true}}catch(e){return{error:e instanceof Error?e.message:"Otázku nelze uložit."}}}
-export async function updateQuestion(id:number, formData:FormData):Promise<AddQuestionState>{try{const question=fromForm(formData);const index=data().findIndex(item=>item.id===id);if(index<0)return{error:"Otázka nebyla nalezena."};data()[index]={...data()[index],...question};revalidatePath("/admin");revalidatePath(`/admin/edit/${id}`);revalidatePath("/");return{success:true}}catch(e){return{error:e instanceof Error?e.message:"Změny nelze uložit."}}}
+export async function bulkImportQuestions(json:string):Promise<AddQuestionState>{try{const parsed=JSON.parse(json);if(!Array.isArray(parsed))return{error:"JSON musí obsahovat pole otázek."};const valid=parsed.map(validate);if(usesDatabase){await ensureDatabase();await db.insert(questions).values(valid)}else{let next=Math.max(...data().map(q=>q.id),0)+1;data().unshift(...valid.map(q=>({...q,id:next++,createdAt:new Date()})))}revalidatePath("/admin");revalidatePath("/");return{success:true}}catch(e){return{error:e instanceof Error?e.message:"JSON se nepodařilo zpracovat."}}}
+export async function addQuestion(_state:AddQuestionState,formData:FormData):Promise<AddQuestionState>{try{const question=fromForm(formData);if(usesDatabase){await ensureDatabase();await db.insert(questions).values(question)}else data().unshift({...question,id:Math.max(...data().map(x=>x.id),0)+1,createdAt:new Date()});revalidatePath("/admin");revalidatePath("/");return{success:true}}catch(e){return{error:e instanceof Error?e.message:"Otázku nelze uložit."}}}
+export async function updateQuestion(id:number, formData:FormData):Promise<AddQuestionState>{try{const question=fromForm(formData);if(usesDatabase){await ensureDatabase();const updated=await db.update(questions).set(question).where(eq(questions.id,id)).returning({id:questions.id});if(!updated.length)return{error:"Otázka nebyla nalezena."}}else{const index=data().findIndex(item=>item.id===id);if(index<0)return{error:"Otázka nebyla nalezena."};data()[index]={...data()[index],...question}}revalidatePath("/admin");revalidatePath(`/admin/edit/${id}`);revalidatePath("/");return{success:true}}catch(e){return{error:e instanceof Error?e.message:"Změny nelze uložit."}}}

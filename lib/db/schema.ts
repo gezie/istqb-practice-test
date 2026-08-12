@@ -2,7 +2,9 @@ import { pgTable, serial, text, integer, jsonb, timestamp } from "drizzle-orm/pg
 
 export type QuestionType = "single" | "multiple" | "matching"
 
-export const questions = pgTable("questions", {
+// Use an application-specific table name. Some hosting databases already contain
+// a generic `questions` table with an unrelated schema.
+export const questions = pgTable("istqb_questions", {
   id: serial("id").primaryKey(),
   text: text("text").notNull(),
   type: text("type").$type<QuestionType>().notNull(),
