@@ -6,10 +6,13 @@ import { ArrowLeft, Inbox } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
-export default async function TestPage({ searchParams }: { searchParams: Promise<{mode?: string;chapters?: string}> }) {
+export default async function TestPage({ searchParams }: { searchParams: Promise<{mode?: string;chapters?: string;count?: string}> }) {
   const params = await searchParams
-  const mode=params.mode||"quick"
-  const questions = mode === "chapters" ? await getQuestionsByChapters((params.chapters||"1").split(",").map(Number)) : await getFullExamQuestions()
+  const mode = ["exam", "practice", "chapters"].includes(params.mode || "") ? params.mode! : "exam"
+  const requestedCount = Math.min(100, Math.max(1, Number(params.count) || 10))
+  const questions = mode === "chapters"
+    ? await getQuestionsByChapters((params.chapters || "1").split(",").map(Number).filter(id => id >= 1 && id <= 6))
+    : await getFullExamQuestions(mode === "exam" ? 40 : requestedCount)
 
   if (questions.length === 0) {
     return (
@@ -38,5 +41,5 @@ export default async function TestPage({ searchParams }: { searchParams: Promise
     )
   }
 
-  return <Quiz questions={questions} mode={mode} />
+  return <Quiz questions={questions} mode={mode} immediateFeedback={mode !== "exam"} />
 }

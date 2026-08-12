@@ -20,13 +20,27 @@ const examples: Omit<Question, "id" | "createdAt">[] = [
 ]
 
 const store = globalThis as typeof globalThis & { istqbQuestionsV4?: Question[] }
-if (!store.istqbQuestionsV4) store.istqbQuestionsV4 = Array.from({ length: 72 }, (_, index) => ({
-  ...examples[index % examples.length],
-  id: index + 1,
-  createdAt: new Date(2026, 0, index + 1),
-}))
+if (!store.istqbQuestionsV4) {
+  const seedCounts = [14, 9, 9, 20, 16, 4]
+  let id = 0
+  store.istqbQuestionsV4 = seedCounts.flatMap((count, chapterIndex) => {
+    const chapterExamples = examples.filter(question => question.categoryId === chapterIndex + 1)
+    return Array.from({ length: count }, (_, index) => ({
+      ...chapterExamples[index % chapterExamples.length],
+      id: ++id,
+      createdAt: new Date(2026, 0, id),
+    }))
+  })
+}
 const data = () => store.istqbQuestionsV4!
-const shuffle = <T,>(items: T[]) => [...items].sort(() => Math.random() - .5)
+const shuffle = <T,>(items: T[]) => {
+  const result = [...items]
+  for (let index = result.length - 1; index > 0; index--) {
+    const target = Math.floor(Math.random() * (index + 1))
+    ;[result[index], result[target]] = [result[target], result[index]]
+  }
+  return result
+}
 export async function getQuestionCount() { return data().length }
 export async function getAllQuestions() { return [...data()].sort((a,b) => b.id-a.id) }
 export async function getQuestionsByChapters(ids: number[]) { return shuffle(data().filter(q => ids.includes(q.categoryId))).slice(0,40) }
